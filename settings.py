@@ -2,13 +2,6 @@
 settings.py
 ───────────
 Loads config.yaml and provides typed access to all settings.
-All other modules import from here instead of reading config directly.
-
-Usage:
-    from settings import cfg
-    print(cfg.branding.organization)
-    print(cfg.colors.bg)
-    print(cfg.model.whisper_model)
 """
 
 import os
@@ -45,7 +38,6 @@ class Colors:
     blue: str = "#58a6ff"
 
     def as_css_vars(self) -> str:
-        """Return CSS custom properties block."""
         return f"""
     --bg:       {self.bg};
     --surface:  {self.surface};
@@ -75,6 +67,31 @@ class Model:
     ])
     batch_size: int = 2
     tc_interval: float = 60.0
+
+
+@dataclass
+class Multilingual:
+    # Used only when no language is forced for the job.
+    enabled: bool = True
+
+    # LID windows inside VAD speech regions.
+    lid_window_seconds: float = 8.0
+    lid_overlap_seconds: float = 2.0
+    lid_batch_size: int = 8
+
+    # Hysteresis: a candidate language must be confident and repeated.
+    lid_min_confidence: float = 0.70
+    switch_confirm_windows: int = 2
+
+    # Prevent pathological tiny language blocks after boundary estimation.
+    min_block_seconds: float = 3.0
+
+
+@dataclass
+class Output:
+    # Global default. Individual watchfolder workflows may override this with
+    # `speakers_json: true|false` in watchfolders.yaml.
+    speakers_json_default: bool = False
 
 
 @dataclass
@@ -123,6 +140,8 @@ class Config:
     branding: Branding = field(default_factory=Branding)
     colors: Colors = field(default_factory=Colors)
     model: Model = field(default_factory=Model)
+    multilingual: Multilingual = field(default_factory=Multilingual)
+    output: Output = field(default_factory=Output)
     runtime: Runtime = field(default_factory=Runtime)
     watchdog: Watchdog = field(default_factory=Watchdog)
     priority: Priority = field(default_factory=Priority)
@@ -134,7 +153,7 @@ def _merge(dataclass_instance, data: dict):
     for key, value in data.items():
         if hasattr(dataclass_instance, key):
             attr = getattr(dataclass_instance, key)
-            if hasattr(attr, '__dataclass_fields__') and isinstance(value, dict):
+            if hasattr(attr, "__dataclass_fields__") and isinstance(value, dict):
                 _merge(attr, value)
             else:
                 setattr(dataclass_instance, key, value)
@@ -144,29 +163,35 @@ def load_config() -> Config:
     config = Config()
     if not CONFIG_PATH.exists():
         return config
+
     try:
         with open(CONFIG_PATH, encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
+
         if "version" in data:
             config.version = str(data["version"])
-        if "branding" in data:
-            _merge(config.branding, data["branding"])
-        if "colors" in data:
-            _merge(config.colors, data["colors"])
-        if "model" in data:
-            _merge(config.model, data["model"])
-        if "runtime" in data:
-            _merge(config.runtime, data["runtime"])
-        if "watchdog" in data:
-            _merge(config.watchdog, data["watchdog"])
-        if "priority" in data:
-            _merge(config.priority, data["priority"])
-        if "transcript" in data:
-            _merge(config.transcript, data["transcript"])
+
+        for section in (
+            "branding",
+            "colors",
+            "model",
+            "multilingual",
+            "output",
+            "runtime",
+            "watchdog",
+            "priority",
+            "transcript",
+        ):
+            if section in data:
+                _merge(getattr(config, section), data[section])
+
     except Exception as e:
-        print(f"[settings] Warning: could not load {CONFIG_PATH}: {e} — using defaults")
+        print(
+            f"[settings] Warning: could not load {CONFIG_PATH}: {e} "
+            "— using defaults"
+        )
+
     return config
 
 
-# Singleton — imported by all other modules
 cfg = load_config()
