@@ -1,147 +1,90 @@
 # config.yaml
-# ────────────────────────────────────────────────────────────────────
-# Central configuration for the Transcription System.
-# Copy this file to config.yaml and adjust to your needs.
-# Changes take effect after restarting the affected service(s):
-#   sudo systemctl restart transcription-webgui
-#   sudo systemctl restart transcription-worker
-#   sudo systemctl restart transcription-watchfolder
-#   sudo systemctl restart transcription-watchdog
-# ────────────────────────────────────────────────────────────────────
+# Central configuration for Studio8 transcription.
 
 version: "1.0.0"
 
-
-# ── Runtime ───────────────────────────────────────────────────────────────────
-# Previously configured via .env — moved here for clarity.
-# Only HF_TOKEN and WEBHOOK_SECRET remain in .env.
 runtime:
-  # Output directory for transcripts, staging folder and job database
   output_dir: "/opt/transcription/output"
-
-  # Seconds to wait after last file change before processing (single-mode watchfolder)
   settle_time: 5
-
-  # Seconds between NAS polling cycles for .done marker files
   batch_poll_interval: 10
-
-  # Seconds between job queue checks in the worker
   worker_poll: 3
-
-  # Git branch to pull from when running update.sh
-  # Change to "dev/v1.0" on development machines
   update_branch: "main"
-
-  # Files larger than this (in GB) are never copied into the staging
-  # directory — the worker reads them directly from the source path instead.
-  # Prevents the watchfolder process from stalling on huge media files
-  # (e.g. a 64 GB MXF over a slow network share).
   staging_copy_max_gb: 5.0
 
-
-# ── Branding ─────────────────────────────────────────────────────────────────
 branding:
-  # Shown in browser tab and page header
   organization: "Your Organization"
-
-  # Shown next to the organization name in the header
   app_name: "Transcription"
-
-  # Footer text on all pages
   footer: "WhisperX · pyannote · Your Organization"
-
-  # Subtitle on the /system status page
   system_subtitle: "System Status"
-
-  # Subtitle on the /queue page
   queue_subtitle: "Queue"
 
-
-# ── Color scheme ──────────────────────────────────────────────────────────────
-# All values are CSS color strings (hex, rgb, named colors, etc.)
 colors:
-  bg: "#080808"        # Page background
-  surface: "#111111"   # Card / panel background
-  surface2: "#1a1a1a"  # Hover states, alternating rows
-  border: "#333333"    # Primary border
-  border2: "#484848"   # Secondary border / separator
-  text: "#f0f0f0"      # Primary text
-  muted: "#888888"     # Secondary text
-  green: "#39d98a"     # Done / active
-  amber: "#ffcc00"     # Running / warning
-  red:   "#ff5555"     # Error / danger
-  blue:  "#58a6ff"     # Info (reserved)
+  bg: "#080808"
+  surface: "#111111"
+  surface2: "#1a1a1a"
+  border: "#333333"
+  border2: "#484848"
+  text: "#f0f0f0"
+  muted: "#888888"
+  green: "#39d98a"
+  amber: "#ffcc00"
+  red: "#ff5555"
+  blue: "#58a6ff"
 
-
-# ── Model settings ────────────────────────────────────────────────────────────
 model:
-  # Whisper model size
-  # Options: tiny, base, small, medium, large-v2, large-v3, large-v3-turbo
-  # large-v3 requires ~6 GB VRAM; large-v3-turbo needs ~3 GB
   whisper_model: "large-v3"
-
-  # Compute device: "cuda" or "cpu"
   device: "cuda"
-
-  # Compute type for Whisper inference
-  # float16: fastest, requires modern GPU (RTX series)
-  # int8:    fast, not supported on all GPUs (Maxwell/Kepler may fail)
-  # float32: slowest but works on all CUDA GPUs including older Quadro cards
   compute_type: "float16"
 
-  # Default language (null = auto-detect per file)
-  # Use ISO 639-1 codes: en, de, es, fr, it, etc.
+  # null = automatic language detection. When multilingual.enabled is true,
+  # automatic detection runs per VAD/time window instead of once per file.
   default_language: null
 
-  # Languages shown in the upload GUI dropdown (in addition to Auto-detect)
   upload_languages:
     - ["en", "English"]
     - ["de", "Deutsch"]
     - ["es", "Español"]
+    - ["fr", "Français"]
 
-  # Whisper inference batch size — reduce to 1 if CUDA out-of-memory errors occur
   batch_size: 2
-
-  # Seconds between forced timecode breaks for single-speaker segments
   tc_interval: 60
 
+# Automatic multilingual mode is only used when no language is forced.
+multilingual:
+  enabled: true
 
-# ── Watchdog ──────────────────────────────────────────────────────────────────
-# Monitors all three services and restarts them if they fail.
-# Also detects stuck worker jobs and requeues them.
+  # Long VAD speech turns are split into overlapping LID windows.
+  lid_window_seconds: 8.0
+  lid_overlap_seconds: 2.0
+
+  # Number of LID windows encoded together.
+  # Reduce if GPU memory becomes tight.
+  lid_batch_size: 8
+
+  # A differing window below this confidence does not trigger a switch.
+  lid_min_confidence: 0.70
+
+  # Number of consecutive confident windows needed to confirm a switch.
+  switch_confirm_windows: 2
+
+  # Blocks shorter than this are merged into a neighbour.
+  min_block_seconds: 3.0
+
+output:
+  # Global default for jobs that do not specify a per-workflow override.
+  # Per watchfolder use `speakers_json: true|false`.
+  speakers_json_default: false
+
 watchdog:
-  # Seconds between health checks
   poll_interval: 30
-
-  # Seconds a job can be in 'running' state before it's considered stuck
-  # Adjust based on your longest expected job duration
   stuck_job_timeout: 3600
-
-  # Hours after which orphaned files in output/staging are removed.
-  # These can accumulate if a job fails before its normal cleanup runs.
   staging_max_age_hours: 24
 
-
-# ── Priority queue ────────────────────────────────────────────────────────────
-# Jobs are processed highest-priority first.
-# Within the same priority, jobs are processed in submission order (FIFO).
-# Running jobs are never interrupted — priority only affects queued jobs.
-# Valid range: 1 (lowest) to 100 (highest).
 priority:
-  # Web GUI manual uploads — should always be highest
   manual_upload: 10
-
-  # General watchfolder (single-mode entries without explicit priority)
   watchfolder_default: 5
-
-  # Maximum number of manual retries allowed per job (via GUI ↺ button)
   max_retries: 3
 
-  # Note: batch-mode watchfolder entries have their own priority
-  # setting per entry in watchfolders.yaml
-
-
-# ── Transcript output ─────────────────────────────────────────────────────────
 transcript:
   date_label: "Date"
   file_label: "File"
@@ -150,5 +93,4 @@ transcript:
   timecode_label: "Timecode start"
   separator_char: "─"
   separator_length: 44
-  # Fallback speaker label when diarization is skipped (no HF_TOKEN)
   fallback_speaker: "SPEAKER_A"
