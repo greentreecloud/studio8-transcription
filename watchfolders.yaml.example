@@ -1,51 +1,46 @@
 # watchfolders.yaml
-# ─────────────────
-# Configuration for all watchfolder sources.
-# Copy this file to watchfolders.yaml and adjust to your needs.
-# Restart transcription-watchfolder after editing.
+#
+# `speakers_json` controls the JSON output PER WORKFLOW.
+# Default: false (also inherited from config.yaml -> output.speakers_json_default).
 
 watchfolders:
 
-  # ── Mode: single ──────────────────────────────────────────────────────────
-  # Each file gets its own transcript.
-  # Monitored continuously by the watchfolder daemon.
-  # "same_as_source" writes the transcript next to the source file.
-  # Existing transcripts are skipped on restart (no double processing).
-
+  # ── Single mode ────────────────────────────────────────────────────────────
   - name: "General Intake"
     mode: single
     path: "/opt/transcription/watchfolder"
     output: "/opt/transcription/output"
-    # output: "same_as_source"   # alternative: transcript next to source file
     priority: 5
     enabled: true
-    # language: "en"             # optional: force language instead of auto-detect
 
-  # ── Mode: batch ───────────────────────────────────────────────────────────
-  # All clips in a card folder → one combined transcript.
-  # Triggered when the ingest system drops a .done marker file inside the
-  # card folder. The marker filename must match the folder name:
-  #
-  #   <path>/
-  #   └── 20240101_ProjectName_Card01/
-  #       ├── 20240101_ProjectName_Card01_001.mxf
-  #       ├── 20240101_ProjectName_Card01_002.mxf
-  #       └── 20240101_ProjectName_Card01.done   ← trigger
-  #
-  # The transcript is written to each destination in 'outputs'.
+    # false = TXT only
+    # true  = TXT + <name>_speakers.json
+    speakers_json: false
 
+    # Optional: force one language and skip multilingual LID.
+    # language: "en"
+
+    # Optional for CIFS/NFS:
+    # poll: true
+    # poll_interval: 10
+
+  # ── Batch mode ─────────────────────────────────────────────────────────────
   - name: "NAS Archive — Current"
     mode: batch
     path: "/mnt/Archive/Ingest/Current"
-    # Multiple output destinations — transcript is copied to each path.
-    # Use "same_as_source" to write into the card folder itself.
-    # For a single output, use 'output: "/path"' instead.
+
     outputs:
       - "same_as_source"
-      # - "/mnt/Archive/Transcripts"   # example: central archive folder
-      # - "/opt/transcription/output"  # example: local backup
+      # - "/mnt/Archive/Transcripts"
+      # - "/opt/transcription/output"
+
     priority: 7
     enabled: true
     done_extension: ".done"
     delete_done_file: true
-    # language: "de"             # optional: force language instead of auto-detect
+
+    # JSON output is controlled independently for this workflow.
+    speakers_json: false
+
+    # Optional: force one language and skip multilingual LID.
+    # language: "de"
